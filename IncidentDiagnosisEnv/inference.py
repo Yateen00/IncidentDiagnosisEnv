@@ -40,7 +40,7 @@ except ImportError:
 
 API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
 MODEL_NAME   = os.getenv("MODEL_NAME")   or "Qwen/Qwen2.5-72B-Instruct"
-HF_TOKEN     = os.getenv("HF_TOKEN")     or os.getenv("API_KEY") or ""
+HF_TOKEN     = os.getenv("HF_TOKEN")     or os.getenv("API_KEY")
 ENV_BASE_URL = os.getenv("ENV_BASE_URL") or "http://localhost:8000"
 MAX_STEPS    = int(os.getenv("MAX_STEPS", "40"))
 
@@ -51,7 +51,7 @@ TASK_IDS  = ["easy", "medium", "hard"]
 # OpenAI-compatible LLM client (uses HF Router)
 # ---------------------------------------------------------------------------
 
-llm = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN or "placeholder")
+llm = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
 # ---------------------------------------------------------------------------
 # Stdout log helpers (exact evaluator format)
@@ -75,7 +75,7 @@ def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> No
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
     print(
         f"[END] success={str(success).lower()} steps={steps} "
-        f"score={score:.3f} rewards={rewards_str}",
+        f"score={score:.2f} rewards={rewards_str}",
         flush=True,
     )
 
