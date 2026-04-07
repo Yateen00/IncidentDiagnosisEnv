@@ -1,0 +1,17 @@
+╰─ uv run openenv push
+
+Validating OpenEnv environment in 
+/mnt/Windows-SSD/Users/yvavi/yeet/coding/projects/meta/IncidentDiagnosisEnv/IncidentDiagnosisEnv...
+⚠ Recommended directory missing: outputs/
+✓ Found OpenEnv environment: IncidentDiagnosisEnv
+✓ Authenticated as: yeet00
+Preparing files for Hugging Face deployment (with web interface)...
+✓ Updated Dockerfile: enabled web interface
+Creating/verifying space: yeet00/IncidentDiagnosisEnv
+✓ Space yeet00/IncidentDiagnosisEnv is ready
+Uploading files to yeet00/IncidentDiagnosisEnv...
+✓ Upload completed successfully
+Space URL: https://huggingface.co/spaces/yeet00/IncidentDiagnosisEnv
+
+✓ Deployment complete!
+Visit your space at: https://huggingface.co/spaces/yeet00/IncidentDiagnosisEnv

@@ -1,0 +1,145 @@
+{
+  "task_id": "hard",
+  "max_steps": 25,
+  "description": "A cascading hidden failure with delayed signals and high log noise. Multiple services show errors but the true root cause is a misconfigured routing table injected 2h ago. Agent must apply a patch — a correct diagnosis alone is not enough.",
+  "services": ["load_balancer", "api_v2", "api_v1", "user_service", "notification_service", "message_queue", "routing_config"],
+  "dependencies": {
+    "load_balancer": ["api_v2", "api_v1"],
+    "api_v2": ["user_service", "message_queue"],
+    "api_v1": ["user_service"],
+    "user_service": ["routing_config"],
+    "notification_service": ["message_queue", "routing_config"],
+    "message_queue": ["routing_config"],
+    "routing_config": []
+  },
+  "hidden_state": {
+    "root_cause": "routing_config_misconfiguration",
+    "failure_mode": "cascading_hidden_failure",
+    "services": {
+      "load_balancer": {
+        "status": "healthy",
+        "cpu_pct": 14.0,
+        "mem_pct": 28.0,
+        "error_rate": 2.1,
+        "logs": [
+          "[INFO]  load_balancer: routing 60% traffic to api_v2, 40% to api_v1",
+          "[WARN]  load_balancer: api_v2 response time p99 = 8200ms (threshold: 2000ms)",
+          "[INFO]  load_balancer: health probe OK for api_v1 (misleading — v1 has hidden failures)",
+          "[INFO]  load_balancer: SSL termination nominal",
+          "[NOISE] load_balancer: 14 keep-alive connections closed (routine)"
+        ]
+      },
+      "api_v2": {
+        "status": "degraded",
+        "cpu_pct": 78.0,
+        "mem_pct": 82.0,
+        "error_rate": 31.0,
+        "logs": [
+          "[ERROR] api_v2: user_service RPC failed — received 503 from user_service",
+          "[WARN]  api_v2: message_queue publish timeout after 8s",
+          "[ERROR] api_v2: 31% of /api/v2/users requests failing",
+          "[NOISE] api_v2: GC pause 120ms (routine)",
+          "[WARN]  api_v2: thread pool 94% utilised"
+        ]
+      },
+      "api_v1": {
+        "status": "degraded",
+        "cpu_pct": 55.0,
+        "mem_pct": 48.0,
+        "error_rate": 18.0,
+        "logs": [
+          "[ERROR] api_v1: user_service lookup failed for 18% of requests",
+          "[WARN]  api_v1: falling back to cached user profiles (may be stale)",
+          "[NOISE] api_v1: scheduled maintenance window acknowledgment logged",
+          "[ERROR] api_v1: profile enrichment via routing_config failing silently"
+        ]
+      },
+      "user_service": {
+        "status": "degraded",
+        "cpu_pct": 60.0,
+        "mem_pct": 55.0,
+        "error_rate": 40.0,
+        "logs": [
+          "[ERROR] user_service: routing_config lookup returned NXDOMAIN for region 'eu-west-3'",
+          "[ERROR] user_service: cannot resolve service endpoint — routing_config entry missing",
+          "[WARN]  user_service: 40% of cross-region user lookups failing",
+          "[INFO]  user_service: same-region lookups healthy (misleading partial health)",
+          "[ERROR] user_service: EU user logins returning 500, US logins nominal"
+        ]
+      },
+      "notification_service": {
+        "status": "down",
+        "cpu_pct": 5.0,
+        "mem_pct": 10.0,
+        "error_rate": 100.0,
+        "logs": [
+          "[FATAL] notification_service: cannot resolve message_queue broker via routing_config",
+          "[FATAL] notification_service: all delivery channels offline — routing failure",
+          "[ERROR] notification_service: SQS endpoint unreachable — wrong region in routing_config",
+          "[INFO]  notification_service: 0 notifications delivered in last 30 minutes"
+        ]
+      },
+      "message_queue": {
+        "status": "degraded",
+        "cpu_pct": 25.0,
+        "mem_pct": 40.0,
+        "error_rate": 15.0,
+        "logs": [
+          "[WARN]  message_queue: consumer group 'notification_consumer' has 0 active members",
+          "[WARN]  message_queue: queue depth growing — 14,200 unprocessed messages",
+          "[INFO]  message_queue: broker healthy — issue is consumer-side",
+          "[NOISE] message_queue: routine compaction completed"
+        ]
+      },
+      "routing_config": {
+        "status": "healthy",
+        "cpu_pct": 3.0,
+        "mem_pct": 5.0,
+        "error_rate": 0.0,
+        "logs": [
+          "[INFO]  routing_config: configuration loaded from /etc/routing/routes.yaml",
+          "[WARN]  routing_config: entry for 'eu-west-3' references deprecated endpoint — NOT validated",
+          "[INFO]  routing_config: last reload 2h 14m ago (matches deployment timestamp)",
+          "[WARN]  routing_config: 3 stale entries found in routing table (eu-west-3, ap-south-2, us-gov-1)",
+          "[INFO]  routing_config: health endpoint returns 200 OK (config loaded, not validated)"
+        ]
+      }
+    },
+    "dependency_health": {
+      "load_balancer->api_v2": {"healthy": true, "latency_ms": 8200, "reason": "slow but not failed"},
+      "load_balancer->api_v1": {"healthy": true, "latency_ms": 450, "reason": "appears healthy"},
+      "api_v2->user_service": {"healthy": false, "latency_ms": null, "reason": "503 errors"},
+      "api_v2->message_queue": {"healthy": false, "latency_ms": 8000, "reason": "timeout"},
+      "api_v1->user_service": {"healthy": false, "latency_ms": null, "reason": "intermittent failures"},
+      "user_service->routing_config": {"healthy": false, "latency_ms": 2, "reason": "NXDOMAIN for eu-west-3"},
+      "notification_service->message_queue": {"healthy": false, "latency_ms": null, "reason": "cannot resolve broker endpoint"},
+      "notification_service->routing_config": {"healthy": false, "latency_ms": 2, "reason": "wrong SQS endpoint in config"},
+      "message_queue->routing_config": {"healthy": false, "latency_ms": 2, "reason": "stale consumer routing"}
+    }
+  },
+  "initial_alerts": [
+    "WARNING: api_v2 p99 latency 8200ms (SLO breach)",
+    "WARNING: EU user logins degraded",
+    "INFO: notification_service health probe failing",
+    "INFO: message_queue depth growing (14k+ messages)"
+  ],
+  "valid_diagnoses": [
+    "routing_config_misconfiguration",
+    "user_service_bug",
+    "message_queue_overload",
+    "api_v2_memory_leak",
+    "network_partition_eu",
+    "database_replication_lag",
+    "load_balancer_misconfiguration"
+  ],
+  "correct_diagnosis": "routing_config_misconfiguration",
+  "restart_heals": [],
+  "patch_heals": {
+    "routing_config": {
+      "eu-west-3": "https://svc.eu-west-3.internal:8080",
+      "ap-south-2": "https://svc.ap-south-2.internal:8080"
+    }
+  },
+  "required_patch_target": "routing_config",
+  "required_patch_keys": ["eu-west-3"]
+}

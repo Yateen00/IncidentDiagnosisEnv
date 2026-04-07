@@ -1,0 +1,123 @@
+{
+  "task_id": "medium",
+  "max_steps": 20,
+  "description": "A billing_service is throwing database overload errors — but it is a downstream victim, not the cause. The real failure is cache memory exhaustion propagating through payment_service and inventory_service. An agent that stops at billing_service and blames the database will be penalised. Trace the full dependency chain to find the true root cause.",
+  "services": ["frontend", "order_service", "payment_service", "inventory_service", "cache", "billing_service"],
+  "dependencies": {
+    "frontend": ["order_service"],
+    "order_service": ["payment_service", "inventory_service"],
+    "payment_service": ["cache", "billing_service"],
+    "inventory_service": ["cache"],
+    "billing_service": ["cache"],
+    "cache": []
+  },
+  "hidden_state": {
+    "root_cause": "cache_memory_exhaustion",
+    "failure_mode": "dependency_timeout",
+    "services": {
+      "frontend": {
+        "status": "degraded",
+        "cpu_pct": 18.0,
+        "mem_pct": 41.0,
+        "error_rate": 12.0,
+        "logs": [
+          "[ERROR] frontend: request timeout after 30s — order_service unresponsive",
+          "[WARN]  frontend: degraded mode enabled, showing cached catalogue",
+          "[INFO]  frontend: 43% of requests are timing out",
+          "[ERROR] frontend: checkout flow broken — downstream order_service error"
+        ]
+      },
+      "order_service": {
+        "status": "degraded",
+        "cpu_pct": 85.0,
+        "mem_pct": 72.0,
+        "error_rate": 28.0,
+        "logs": [
+          "[ERROR] order_service: payment_service call timed out after 10s",
+          "[ERROR] order_service: inventory_service call timed out after 10s",
+          "[WARN]  order_service: thread pool saturated — queue depth 1200",
+          "[INFO]  order_service: circuit breaker OPEN for payment_service"
+        ]
+      },
+      "payment_service": {
+        "status": "degraded",
+        "cpu_pct": 45.0,
+        "mem_pct": 60.0,
+        "error_rate": 22.0,
+        "logs": [
+          "[ERROR] payment_service: redis GET timeout after 5s (cache unavailable)",
+          "[WARN]  payment_service: failing open — skipping cache, hitting DB directly",
+          "[INFO]  payment_service: DB load increased 8x due to cache bypass",
+          "[ERROR] payment_service: transaction lock contention on orders table"
+        ]
+      },
+      "inventory_service": {
+        "status": "degraded",
+        "cpu_pct": 50.0,
+        "mem_pct": 65.0,
+        "error_rate": 25.0,
+        "logs": [
+          "[ERROR] inventory_service: redis SET timeout after 5s",
+          "[WARN]  inventory_service: cache miss rate 100% — all reads bypassing cache",
+          "[ERROR] inventory_service: stock level reads are stale by >30s",
+          "[INFO]  inventory_service: fallback to slow DB path active"
+        ]
+      },
+      "cache": {
+        "status": "degraded",
+        "cpu_pct": 12.0,
+        "mem_pct": 99.8,
+        "error_rate": 80.0,
+        "logs": [
+          "[FATAL] cache: used_memory 7.98GB / maxmemory 8GB — eviction policy active",
+          "[ERROR] cache: OOM command not allowed — maxmemory reached, keys evicted",
+          "[WARN]  cache: evicted 2.1M keys in last 60s (allkeys-lru policy)",
+          "[INFO]  cache: connection count 4821 — approaching ulimit",
+          "[WARN]  cache: replication lag 8.2s — replica falling behind"
+        ]
+      },
+      "billing_service": {
+        "status": "degraded",
+        "cpu_pct": 91.0,
+        "mem_pct": 78.0,
+        "error_rate": 55.0,
+        "logs": [
+          "[ERROR] billing_service: database query timeout after 8s — overloaded?",
+          "[ERROR] billing_service: invoice generation failed — DB connection pool exhausted (pool_size=20, waiting=47)",
+          "[WARN]  billing_service: falling back to async invoice queue — SLA at risk",
+          "[ERROR] billing_service: redis session cache unavailable — re-authenticating every request",
+          "[CRIT]  billing_service: 55% of billing requests failing — page on-call immediately"
+        ]
+      }
+    },
+    "dependency_health": {
+      "frontend->order_service": {"healthy": false, "latency_ms": 30000, "reason": "timeout"},
+      "order_service->payment_service": {"healthy": false, "latency_ms": 10000, "reason": "circuit_breaker_open"},
+      "order_service->inventory_service": {"healthy": false, "latency_ms": 10000, "reason": "timeout"},
+      "payment_service->cache": {"healthy": false, "latency_ms": 5000, "reason": "cache_oom_timeouts"},
+      "payment_service->billing_service": {"healthy": false, "latency_ms": 8000, "reason": "billing_downstream_slow"},
+      "billing_service->cache": {"healthy": false, "latency_ms": 5000, "reason": "cache_oom_timeouts"},
+      "inventory_service->cache": {"healthy": false, "latency_ms": 5000, "reason": "cache_oom_timeouts"}
+    }
+  },
+  "initial_alerts": [
+    "CRITICAL: billing_service error rate 55% — invoice generation failing",
+    "WARNING:  frontend checkout success rate dropped to 57%",
+    "WARNING:  order_service error rate elevated (28%)",
+    "INFO:     payment_service circuit breaker opened"
+  ],
+  "valid_diagnoses": [
+    "cache_memory_exhaustion",
+    "billing_service_overload",
+    "database_overload",
+    "payment_service_bug",
+    "order_service_memory_leak",
+    "network_partition_payment",
+    "frontend_misconfiguration"
+  ],
+  "correct_diagnosis": "cache_memory_exhaustion",
+  "restart_heals": [],
+  "patch_heals": {
+    "cache": {"maxmemory": "4gb", "maxmemory-policy": "volatile-lru"}
+  }
+}

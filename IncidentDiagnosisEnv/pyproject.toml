@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openenv-IncidentDiagnosisEnv"
+version = "0.1.0"
+description = "POMDP-based Interactive Incident Diagnosis Environment for OpenEnv"
+requires-python = ">=3.10"
+dependencies = [
+    # Core OpenEnv runtime (FastAPI server + HTTP client types)
+    "openenv-core[core]>=0.2.2",
+    # OpenAI-compatible client for inference.py (uses HF Router)
+    "openai>=1.0.0",
+    "huggingface-hub[cli]>=1.9.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.scripts]
+# Server entry point: uv run --project . server
+server = "IncidentDiagnosisEnv.server.app:main"
+
+[tool.setuptools]
+include-package-data = true
+packages = ["IncidentDiagnosisEnv", "IncidentDiagnosisEnv.server"]
+package-dir = { "IncidentDiagnosisEnv" = ".", "IncidentDiagnosisEnv.server" = "server" }
+
+[tool.setuptools.package-data]
+"IncidentDiagnosisEnv" = ["tasks/*.json"]

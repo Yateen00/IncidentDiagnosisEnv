@@ -1,0 +1,72 @@
+{
+  "task_id": "easy",
+  "max_steps": 15,
+  "description": "A single service has crashed. Logs are clear. Identify the root cause.",
+  "services": ["api_gateway", "auth_service", "database"],
+  "dependencies": {
+    "api_gateway": ["auth_service"],
+    "auth_service": ["database"],
+    "database": []
+  },
+  "hidden_state": {
+    "root_cause": "database_crash",
+    "failure_mode": "service_crash",
+    "services": {
+      "api_gateway": {
+        "status": "degraded",
+        "cpu_pct": 22.0,
+        "mem_pct": 45.0,
+        "error_rate": 35.0,
+        "logs": [
+          "[ERROR] api_gateway: upstream connection refused from auth_service",
+          "[WARN]  api_gateway: retrying auth_service (attempt 3/3)",
+          "[ERROR] api_gateway: max retries exceeded, returning 503 to clients",
+          "[INFO]  api_gateway: health check FAIL for auth_service endpoint"
+        ]
+      },
+      "auth_service": {
+        "status": "down",
+        "cpu_pct": 5.0,
+        "mem_pct": 8.0,
+        "error_rate": 100.0,
+        "logs": [
+          "[ERROR] auth_service: cannot connect to database at db:5432 — connection refused",
+          "[FATAL] auth_service: startup probe failed, entering crash loop",
+          "[ERROR] auth_service: retrying database connection (attempt 5/5) — giving up",
+          "[INFO]  auth_service: process exiting with code 1"
+        ]
+      },
+      "database": {
+        "status": "down",
+        "cpu_pct": 0.0,
+        "mem_pct": 0.0,
+        "error_rate": 0.0,
+        "logs": [
+          "[FATAL] database: out of disk space — data directory full",
+          "[FATAL] database: cannot write WAL, shutting down",
+          "[FATAL] database: PostgreSQL process terminated abnormally",
+          "[INFO]  database: last checkpoint was 42 minutes ago"
+        ]
+      }
+    },
+    "dependency_health": {
+      "api_gateway->auth_service": {"healthy": false, "latency_ms": null, "reason": "auth_service is DOWN"},
+      "auth_service->database": {"healthy": false, "latency_ms": null, "reason": "database is DOWN"}
+    }
+  },
+  "initial_alerts": [
+    "CRITICAL: api_gateway returning HTTP 503 — upstream failure",
+    "CRITICAL: auth_service is DOWN (crash loop)",
+    "WARNING: database health check failing"
+  ],
+  "valid_diagnoses": [
+    "database_crash",
+    "auth_service_crash",
+    "api_gateway_misconfiguration",
+    "network_partition",
+    "memory_leak_database"
+  ],
+  "correct_diagnosis": "database_crash",
+  "restart_heals": ["database"],
+  "patch_heals": {}
+}
