@@ -36,21 +36,28 @@ This is **not solvable by a single LLM prompt** — it requires sequential, stra
 ## 🗂️ Project Structure
 
 ```
-IncidentDiagnosisEnv/
+.
 ├── server/
 │   ├── app.py                              # FastAPI server (OpenEnv factory)
-│   └── incident_diagnosis_environment.py   # Core environment logic
-├── graders.py                              # Deterministic per-task graders (0.0-1.0)
+│   ├── incident_diagnosis_environment.py   # Core environment logic
+│   ├── requirements.txt                    # Server Python dependencies
+│   └── __init__.py
 ├── tasks/
 │   ├── task_easy.json                      # Single service crash
 │   ├── task_medium.json                    # Dependency timeout cascade
 │   └── task_hard.json                      # Hidden cascading failure + patch required
 ├── models.py                               # Pydantic observation/action types
 ├── client.py                               # Typed EnvClient wrapper
+├── graders.py                              # Deterministic per-task graders
 ├── inference.py                            # Baseline agent (HF Router + OpenAI client)
 ├── validate_graders.py                     # Determinism/range checks for graders
-├── openenv.yaml                            # OpenEnv spec
-├── pyproject.toml                          # Dependencies
+├── validate_tasks.py                       # Task JSON schema validation
+├── validate-submission.sh                  # End-to-end pre-submission validator
+├── run_test.sh                             # Quick local smoke test
+├── openenv.yaml                            # OpenEnv spec metadata
+├── pyproject.toml                          # Project dependencies (uv)
+├── uv.lock                                 # Locked dependency tree
+├── __init__.py                             # Package init (exports client + models)
 └── Dockerfile                              # Production container
 ```
 
@@ -105,7 +112,7 @@ class IncidentDiagnosisAction(Action):
 | `check_dependency` | Reveals health of outgoing dependency links from target |
 | `restart_service` | Heals target if it's the root cause service, else -0.20 |
 | `apply_patch` | Accepts JSON config; correct keys heal target service |
-| `propose_diagnosis` | Ends episode; correct = +1.0, wrong = -0.30. ANY wrong diagnosis ends the episode! |
+| `propose_diagnosis` | Ends episode; correct = +0.99 (grader), wrong = -0.30 penalty. ANY wrong diagnosis ends the episode! |
 
 ---
 
@@ -118,15 +125,15 @@ class IncidentDiagnosisAction(Action):
 | Useful log revealed | **+0.05** |
 | Unhealthy service inspected | **+0.10** |
 | Unhealthy dep link revealed | **+0.08** per link |
-| Correct restart | **+1.00** (easy), **+0.30** (partial) |
+| Correct restart | **+0.99** (easy task), **+0.30** (partial in other tasks) |
 | Wrong restart | **-0.20** |
 | Correct patch key accepted | **+0.50** |
 | Wrong patch | **-0.10** |
-| Correct diagnosis (easy/medium) | **+1.00** |
-| Correct diagnosis (hard, patch also correct) | **+1.00** |
-| Partial credit (hard: correct diagnosis, no patch) | **+0.20** |
-| Wrong diagnosis | **-0.30** |
-| Timeout (max steps) | **-0.10** |
+| Correct diagnosis (easy/medium) — grader score | **0.99** |
+| Correct diagnosis + patch (hard) — grader score | **0.99** |
+| Partial credit (hard: correct diagnosis, no patch) | **0.50** grader score |
+| Wrong diagnosis | **-0.30** step penalty + episode ends |
+| Timeout (max steps exceeded) | **-0.10** |
 
 **Key design principle:** Information gathering never accumulates unbounded rewards — the total budget is dominated by the final resolution reward. This eliminates reward hacking.
 
@@ -161,9 +168,9 @@ class IncidentDiagnosisAction(Action):
 Each task has a deterministic programmatic grader in `graders.py`:
 
 ```python
-grade_easy(trajectory)   -> float in [0.0, 1.0]
-grade_medium(trajectory) -> float in [0.0, 1.0]
-grade_hard(trajectory)   -> float in [0.0, 1.0]
+grade_easy(trajectory)   -> float  # strictly in (0.01, 0.99)
+grade_medium(trajectory) -> float  # strictly in (0.01, 0.99)
+grade_hard(trajectory)   -> float  # strictly in (0.01, 0.99)
 grade_task(task_id, trajectory)  # dispatcher
 ```
 
@@ -299,11 +306,13 @@ curl -X POST http://localhost:8000/step \
 
 ## ⚙️ Constraints
 
-- Runtime: < 20 minutes per full evaluation
+- Runtime: < 20 minutes per full evaluation (all 3 tasks)
 - Resources: 2 vCPU, 8 GB RAM (synthetic state machine — no real services)
 - All hidden state is pure Python in-memory
 - Deterministic: same `task_id` always produces same hidden scenario
 - Reproducible: no randomness in task data
+- Per-task step limits: easy=15, medium=20, hard=25 (enforced by environment)
+- Grader scores strictly in open interval `(0.0, 1.0)` — min `0.01`, max `0.99`
 
 ---
 
