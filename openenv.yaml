@@ -1,5 +1,6 @@
 spec_version: 1
 name: IncidentDiagnosisEnv
+description: "A POMDP environment where an AI agent acts as an SRE diagnosing production incidents via sequential investigation actions."
 type: space
 runtime: fastapi
 app: server.app:app

@@ -168,16 +168,16 @@ grade_task(task_id, trajectory)  # dispatcher
 ```
 
 Scoring contract:
-- Easy: `1.0` for correct resolution, otherwise partial credit for useful investigation.
-- Medium: `1.0` for correct `cache_memory_exhaustion` diagnosis, otherwise partial credit for tracing cache-related dependencies.
-- Hard: `1.0` only for correct diagnosis + accepted patch, `0.5` for correct diagnosis without patch, lower partial scores for strong investigation.
+- Easy: `0.99` (max) for correct resolution, otherwise partial credit for useful investigation.
+- Medium: `0.99` (max) for correct `cache_memory_exhaustion` diagnosis, otherwise partial credit for tracing cache-related dependencies.
+- Hard: `0.99` only for correct diagnosis + accepted patch, `0.5` for correct diagnosis without patch, lower partial scores for strong investigation.
 
 Scoring policy used in this environment:
-- Final task score (grader) is success-first: it measures completion quality in `[0.0, 1.0]`.
+- Final task score (grader) is success-first: it measures completion quality in `(0.0, 1.0)`.
 - Step efficiency is captured separately by trajectory rewards and total steps.
 - This keeps grading interpretable while still penalizing slow/redundant behavior through reward shaping.
 
-All grader outputs are deterministic and clamped to `[0.0, 1.0]`.
+All grader outputs are deterministic and strictly bounded to `(0.01, 0.99)` — never exactly `0.0` or `1.0`.
 
 Task files include explicit grader references:
 - `tasks/task_easy.json` → `graders:grade_easy`
@@ -236,16 +236,16 @@ python inference.py
 ```
 
 Mandatory inference env vars for evaluation:
-- `API_BASE_URL` - model API endpoint
-- `MODEL_NAME` - model identifier
-- `HF_TOKEN` - API key/token
+- `HF_TOKEN` (or `OPENAI_API_KEY`) - API key/token for LLM access
+- `API_BASE_URL` - model API endpoint (default: `https://router.huggingface.co/v1`)
+- `MODEL_NAME` - model identifier (default: `Qwen/Qwen2.5-72B-Instruct`)
 
 `inference.py` emits evaluator-compatible structured stdout only:
 - `[START] ...`
 - `[STEP] ...`
 - `[END] ...`
 
-All task scores emitted in `[END]` are normalized to `[0.0, 1.0]` via deterministic task graders.
+All task scores emitted in `[END]` are normalized to `(0.0, 1.0)` via deterministic task graders — never exactly 0 or 1.
 `[END]` also includes `steps` and the full `rewards` sequence so efficiency can be evaluated alongside correctness.
 
 ### Run with Docker
@@ -325,16 +325,27 @@ curl -X POST http://localhost:8000/step \
 
 Reference run configuration:
 - Script: `inference.py`
+- Model: `Qwen/Qwen2.5-72B-Instruct` via HF Router
 - `temperature=0.0`
 - Task order: `easy → medium → hard`
 - Scoring: deterministic `grade_task(task_id, trajectory)`
 
-When `HF_TOKEN` is unset/invalid, the script uses a deterministic fallback policy for actions; this produces a reproducible offline baseline:
+All scores are strictly in the open interval `(0.0, 1.0)` — never exactly 0 or 1.
 
-| Task | Score |
-|---|---:|
-| easy | 1.00 |
-| medium | 1.00 |
-| hard | 1.00 |
+**Heuristic offline baseline** (deterministic fallback policy, no LLM — always reproducible):
 
-These are valid normalized scores in `[0, 1]` and provide a reproducible baseline floor.
+| Task | Fallback Policy Score | Notes |
+|---|---:|---|
+| easy | 0.99 | Optimal 3-step policy: inspect → query → propose_diagnosis |
+| medium | 0.99 | 4-step policy traces cache deps then proposes correct diagnosis |
+| hard | 0.99 | 4-step policy: inspect → query → apply_patch → propose_diagnosis |
+
+**LLM agent baseline** (Qwen2.5-72B-Instruct, `temperature=0.0`, expected range):
+
+| Task | Expected Score Range | Notes |
+|---|---:|---|
+| easy | 0.70 – 0.99 | Clear signals; most frontier models solve it |
+| medium | 0.40 – 0.85 | Misleading logs require multi-step dependency tracing |
+| hard | 0.10 – 0.50 | Requires patch + diagnosis; routing config is deceptive |
+
+> **Offline reproducibility:** When `HF_TOKEN` is not set, `inference.py` uses the deterministic fallback policy above to produce reproducible scores without any LLM API calls.
