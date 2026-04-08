@@ -14,7 +14,7 @@ Trajectory = List[TrajectoryStep]
 
 
 def _clamp01(value: float) -> float:
-    return max(0.0, min(1.0, round(value, 4)))
+    return max(0.01, min(0.99, round(value, 4)))
 
 
 def _norm(text: Optional[str]) -> str:
@@ -90,11 +90,11 @@ def grade_easy(trajectory: Trajectory) -> float:
     Partial: Investigation progress + some reward shaping.
     """
     if not trajectory:
-        return 0.0
+        return 0.01
 
     final = _final_meta(trajectory)
     if bool(final.get("success", False)):
-        return 1.0
+        return 0.99
 
     diagnosed = any(
         _action_type(step) == "propose_diagnosis" and "database_crash" in _action_diag(step)
@@ -107,7 +107,7 @@ def grade_easy(trajectory: Trajectory) -> float:
 
     # Easy objective is to identify/resolve the root cause; either is full credit.
     if diagnosed or restarted_db:
-        return 1.0
+        return 0.99
 
     score = 0.0
     score += _investigation_bonus(trajectory, cap=0.2)
@@ -121,11 +121,11 @@ def grade_medium(trajectory: Trajectory) -> float:
     Partial: Agent investigated cache path and collected dependency evidence.
     """
     if not trajectory:
-        return 0.0
+        return 0.01
 
     final = _final_meta(trajectory)
     if bool(final.get("success", False)):
-        return 1.0
+        return 0.99
 
     diagnosed = any(
         _action_type(step) == "propose_diagnosis" and "cache_memory_exhaustion" in _action_diag(step)
@@ -159,11 +159,11 @@ def grade_hard(trajectory: Trajectory) -> float:
     0.2-0.4: strong investigation progress without full resolution.
     """
     if not trajectory:
-        return 0.0
+        return 0.01
 
     final = _final_meta(trajectory)
     if bool(final.get("success", False)):
-        return 1.0
+        return 0.99
 
     diagnosed = any(
         _action_type(step) == "propose_diagnosis" and "routing_config_misconfiguration" in _action_diag(step)
@@ -184,7 +184,7 @@ def grade_hard(trajectory: Trajectory) -> float:
     )
 
     if diagnosed and patch_accepted:
-        return 1.0
+        return 0.99
     if diagnosed and not patch_accepted:
         return 0.5
 

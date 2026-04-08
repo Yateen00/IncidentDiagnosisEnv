@@ -372,7 +372,7 @@ def run_episode(env, task_id: str) -> dict:
         # Deterministic task-specific grading in [0, 1].
         score = grade_task(task_id, trajectory)
         # Some transports may omit "success" in metadata, so derive from score.
-        success = score >= 1.0
+        success = score >= 0.99
 
     finally:
         log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
@@ -406,10 +406,10 @@ def main() -> None:
                 results.append(summary)
             except Exception as exc:
                 _debug(f"Episode crashed for task_id={task_id!r}: {exc!r}")
-                log_end(success=False, steps=0, score=0.0, rewards=[])
+                log_end(success=False, steps=0, score=0.01, rewards=[])
                 results.append({
                     "task_id":     task_id,
-                    "score":       0.0,
+                    "score":       0.01,
                     "steps_taken": 0,
                     "success":     False,
                 })
