@@ -665,7 +665,7 @@ if __name__ == "__main__":
     obs = env.reset(task_id="easy")
     print(f"  reset → step={obs.step_count}  done={obs.done}")
     print(f"  alerts: {obs.alerts}")
-    print(f"  valid_diagnoses: {obs.valid_diagnoses}")
+    print(f"  metadata keys: {list(obs.metadata.keys())}")
 
     steps = [
         IncidentDiagnosisAction(action_type="inspect_service",  target="database"),

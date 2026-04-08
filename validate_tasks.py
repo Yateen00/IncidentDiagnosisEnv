@@ -33,7 +33,7 @@ TASKS_DIR  = SCRIPT_DIR / "tasks"
 TASK_FILES = ["task_easy.json", "task_medium.json", "task_hard.json"]
 
 REQUIRED_TOP_LEVEL = {
-    "task_id", "description", "services", "dependencies",
+    "task_id", "grader", "description", "services", "dependencies",
     "hidden_state", "initial_alerts", "valid_diagnoses",
     "correct_diagnosis", "restart_heals", "patch_heals",
 }
@@ -84,6 +84,12 @@ def check_top_level(data: dict, task: str) -> bool:
     if missing:
         err(task, f"Missing top-level keys: {missing}")
         valid = False
+    if valid:
+        grader = data.get("grader")
+        if not isinstance(grader, str) or ":" not in grader:
+            err(task, "grader must be a string in the format 'module:function'")
+            valid = False
+
     if valid:
         ok(f"Top-level keys: all {len(REQUIRED_TOP_LEVEL)} required fields present")
     return valid

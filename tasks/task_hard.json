@@ -1,5 +1,6 @@
 {
   "task_id": "hard",
+  "grader": "graders:grade_hard",
   "max_steps": 25,
   "description": "A cascading hidden failure with delayed signals and high log noise. Multiple services show errors but the true root cause is a misconfigured routing table injected 2h ago. Agent must apply a patch — a correct diagnosis alone is not enough.",
   "services": ["load_balancer", "api_v2", "api_v1", "user_service", "notification_service", "message_queue", "routing_config"],

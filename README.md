@@ -40,6 +40,7 @@ IncidentDiagnosisEnv/
 ├── server/
 │   ├── app.py                              # FastAPI server (OpenEnv factory)
 │   └── incident_diagnosis_environment.py   # Core environment logic
+├── graders.py                              # Deterministic per-task graders (0.0-1.0)
 ├── tasks/
 │   ├── task_easy.json                      # Single service crash
 │   ├── task_medium.json                    # Dependency timeout cascade
@@ -47,6 +48,7 @@ IncidentDiagnosisEnv/
 ├── models.py                               # Pydantic observation/action types
 ├── client.py                               # Typed EnvClient wrapper
 ├── inference.py                            # Baseline agent (HF Router + OpenAI client)
+├── validate_graders.py                     # Determinism/range checks for graders
 ├── openenv.yaml                            # OpenEnv spec
 ├── pyproject.toml                          # Dependencies
 └── Dockerfile                              # Production container
@@ -156,21 +158,31 @@ class IncidentDiagnosisAction(Action):
 
 ## 🧮 Graders
 
-Each task has a deterministic grader:
+Each task has a deterministic programmatic grader in `graders.py`:
 
 ```python
-def grader(trajectory, final_answer):
-    if final_answer == ground_truth and (patch_correct or task != "hard"):
-        return 1.0
-    elif final_answer == ground_truth:
-        return 0.5   # correct diagnosis, wrong/missing patch
-    elif diagnosis_attempted and close_to_correct:
-        return 0.2   # partial credit
-    else:
-        return 0.0
+grade_easy(trajectory)   -> float in [0.0, 1.0]
+grade_medium(trajectory) -> float in [0.0, 1.0]
+grade_hard(trajectory)   -> float in [0.0, 1.0]
+grade_task(task_id, trajectory)  # dispatcher
 ```
 
-All scores are in `[0.0, 1.0]`, deterministic, and reproducible.
+Scoring contract:
+- Easy: `1.0` for correct resolution, otherwise partial credit for useful investigation.
+- Medium: `1.0` for correct `cache_memory_exhaustion` diagnosis, otherwise partial credit for tracing cache-related dependencies.
+- Hard: `1.0` only for correct diagnosis + accepted patch, `0.5` for correct diagnosis without patch, lower partial scores for strong investigation.
+
+Scoring policy used in this environment:
+- Final task score (grader) is success-first: it measures completion quality in `[0.0, 1.0]`.
+- Step efficiency is captured separately by trajectory rewards and total steps.
+- This keeps grading interpretable while still penalizing slow/redundant behavior through reward shaping.
+
+All grader outputs are deterministic and clamped to `[0.0, 1.0]`.
+
+Task files include explicit grader references:
+- `tasks/task_easy.json` → `graders:grade_easy`
+- `tasks/task_medium.json` → `graders:grade_medium`
+- `tasks/task_hard.json` → `graders:grade_hard`
 
 ---
 
@@ -196,6 +208,7 @@ The deployed Space includes:
 - Python 3.10+
 - `uv` package manager (or `pip`)
 - HF Token with inference access
+- `openenv` CLI (`pip install openenv-core`)
 
 ### Install
 ```bash
@@ -213,16 +226,47 @@ uv run --project . server
 ### Run baseline agent
 ```bash
 export HF_TOKEN=hf_...
+export API_BASE_URL=https://router.huggingface.co/v1
 export MODEL_NAME=Qwen/Qwen2.5-72B-Instruct
 export ENV_BASE_URL=http://localhost:8000
+# Optional (required by some evaluators when using dockerized env loading)
+export LOCAL_IMAGE_NAME=incident-diagnosis-env
 
 python inference.py
 ```
+
+Mandatory inference env vars for evaluation:
+- `API_BASE_URL` - model API endpoint
+- `MODEL_NAME` - model identifier
+- `HF_TOKEN` - API key/token
+
+`inference.py` emits evaluator-compatible structured stdout only:
+- `[START] ...`
+- `[STEP] ...`
+- `[END] ...`
+
+All task scores emitted in `[END]` are normalized to `[0.0, 1.0]` via deterministic task graders.
+`[END]` also includes `steps` and the full `rewards` sequence so efficiency can be evaluated alongside correctness.
 
 ### Run with Docker
 ```bash
 docker build -t incident-diagnosis-env .
 docker run -p 8000:8000 -e HF_TOKEN=$HF_TOKEN incident-diagnosis-env
+```
+
+### Validate task + grader integrity
+```bash
+python validate_tasks.py
+python validate_graders.py
+```
+
+### Pre-submission validator
+```bash
+# 1) Ensure CLI is installed
+pip install openenv-core
+
+# 2) Run the validator script
+./validate-submission.sh https://<your-space>.hf.space .
 ```
 
 ---
@@ -274,3 +318,23 @@ curl -X POST http://localhost:8000/step \
 | Deterministic grading | ✅ No randomness in scoring |
 | Not LLM-solvable in one shot | ✅ Requires multi-turn investigation |
 | Increasing difficulty | ✅ Easy → Medium → Hard with different failure modes |
+
+---
+
+## 📊 Baseline Scores (Reproducible)
+
+Reference run configuration:
+- Script: `inference.py`
+- `temperature=0.0`
+- Task order: `easy → medium → hard`
+- Scoring: deterministic `grade_task(task_id, trajectory)`
+
+When `HF_TOKEN` is unset/invalid, the script uses a deterministic fallback policy for actions; this produces a reproducible offline baseline:
+
+| Task | Score |
+|---|---:|
+| easy | 1.00 |
+| medium | 1.00 |
+| hard | 1.00 |
+
+These are valid normalized scores in `[0, 1]` and provide a reproducible baseline floor.

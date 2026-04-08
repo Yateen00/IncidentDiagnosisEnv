@@ -21,11 +21,18 @@ from openenv.core import EnvClient
 from openenv.core.client_types import StepResult
 from openenv.core.env_server.types import State
 
-from .models import (
-    IncidentDiagnosisAction,
-    IncidentDiagnosisObservation,
-    ServiceStatus,
-)
+try:
+    from .models import (
+        IncidentDiagnosisAction,
+        IncidentDiagnosisObservation,
+        ServiceStatus,
+    )
+except ImportError:
+    from models import (  # type: ignore[no-redef]
+        IncidentDiagnosisAction,
+        IncidentDiagnosisObservation,
+        ServiceStatus,
+    )
 
 
 class IncidentDiagnosisEnv(
@@ -69,6 +76,7 @@ class IncidentDiagnosisEnv(
             previous_actions  = obs_data.get("previous_actions", []),
             step_count        = int(obs_data.get("step_count", 0)),
             done              = bool(payload.get("done", obs_data.get("done", False))),
+            reward            = float(obs_data.get("reward", 0.0)),
             metadata          = obs_data.get("metadata", {}),
         )
 

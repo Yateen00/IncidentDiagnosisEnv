@@ -1,5 +1,6 @@
 {
   "task_id": "medium",
+  "grader": "graders:grade_medium",
   "max_steps": 20,
   "description": "A billing_service is throwing database overload errors — but it is a downstream victim, not the cause. The real failure is cache memory exhaustion propagating through payment_service and inventory_service. An agent that stops at billing_service and blames the database will be penalised. Trace the full dependency chain to find the true root cause.",
   "services": ["frontend", "order_service", "payment_service", "inventory_service", "cache", "billing_service"],

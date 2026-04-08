@@ -1,5 +1,6 @@
 {
   "task_id": "easy",
+  "grader": "graders:grade_easy",
   "max_steps": 15,
   "description": "A single service has crashed. Logs are clear. Identify the root cause.",
   "services": ["api_gateway", "auth_service", "database"],
