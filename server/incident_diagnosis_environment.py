@@ -20,9 +20,9 @@ Reward Design (anti-hacking)
 * Redundant action:  -0.05  (re-querying same logs with same filter)
 * Wrong restart:     -0.20  (restarting a service that is not the root cause)
 * Wrong diagnosis:   -0.30  (incorrect propose_diagnosis)
-* Correct diagnosis: +1.00  (easy/medium — pose is sufficient)
-* Correct diagnosis + correct patch applied: +1.00 (hard task)
-* Episode score clamped to [0.0, 1.0] via step efficiency bonus.
+* Correct diagnosis: +0.99  (easy/medium — pose is sufficient, grader score)
+* Correct diagnosis + correct patch applied: +0.99 (hard task, grader score)
+* Episode grader score strictly in (0.01, 0.99) — never exactly 0 or 1.
 
 POMDP properties
 ----------------
@@ -239,7 +239,7 @@ class IncidentDiagnosisEnvironment(Environment):
             if action.target not in self._hidden["hidden_state"]["services"]:
                 self.step_count += 1
                 return self._make_obs(
-                    done=self.step_count >= MAX_STEPS,
+                    done=self.step_count >= self._hidden.get("max_steps", MAX_STEPS),
                     metadata={
                         "last_action_valid": False,
                         "error":  f"Unknown service: {action.target!r}. "

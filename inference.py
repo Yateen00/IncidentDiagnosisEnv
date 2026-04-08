@@ -3,17 +3,19 @@ Incident Diagnosis Environment — Baseline Inference Script
 ==========================================================
 
 Mandatory env vars:
+  HF_TOKEN         HF / API key  (also accepts OPENAI_API_KEY or API_KEY)
   API_BASE_URL     LLM endpoint  (default: https://router.huggingface.co/v1)
   MODEL_NAME       Model id      (default: Qwen/Qwen2.5-72B-Instruct)
-  HF_TOKEN         HF / API key
   ENV_BASE_URL     Running env server (default: http://localhost:8000)
+  LOCAL_IMAGE_NAME Docker image name if using from_docker_image() (optional)
 
 STDOUT FORMAT (evaluator parses these — do not change):
   [START] task=<task_id> env=IncidentDiagnosisEnv model=<model>
   [STEP]  step=<n> action=<str> reward=<0.00> done=<true|false> error=<msg|null>
-  [END]   success=<true|false> steps=<n> score=<0.000> rewards=<r1,r2,...>
+  [END]   success=<true|false> steps=<n> score=<0.00> rewards=<r1,r2,...>
 
 All debug output goes to stderr.
+All scores are in the open interval (0.0, 1.0) — never exactly 0 or 1.
 """
 
 from __future__ import annotations

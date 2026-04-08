@@ -215,11 +215,13 @@ class IncidentDiagnosisReward(BaseModel):
     constituent parts without re-parsing episode logs.
 
     The scalar `value` is computed by the environment as:
-        value = investigative_reward          # +0.05–0.22 per useful action
-                + resolution_reward           # +1.0 on correct diagnosis/restart
+        value = investigative_reward          # +0.02–0.22 per useful action
+                + resolution_reward           # +0.99 (grader) on correct diagnosis/restart
                 - step_cost                   # -0.02 per step
                 - redundancy_penalty          # -0.05 on repeated queries
-                - wrong_action_penalty        # -0.20 wrong restart, -0.30 wrong diag
+                - wrong_action_penalty        # -0.20 wrong restart, -0.30 wrong diagnosis
+
+    Final episode grader score is strictly in (0.01, 0.99) — never exactly 0.0 or 1.0.
     """
 
     value: float = Field(
